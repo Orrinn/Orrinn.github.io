@@ -1,0 +1,245 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="dark"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><title>semihosting与BKPT 0XAB | Orrin's Blog</title><meta name="keywords" content="嵌入式,stm32"><meta name="author" content="Orrin"><meta name="copyright" content="Orrin"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#0d0d0d"><meta name="description" content="今天被学长问到了一个奇怪的现象，就是stm32上电之后卡死的问题，简单的说stm32中使用了printf函数，同时进行了串口的重定向，但并未按照常规操作勾选Mircolib，导致上电卡死。但是debug的时候发现了汇编指令中本不应该存在的BKPT 0xAB，这就十分迷惑了，因此特意了解一下相关细节  什么是Microlib ​	对stm32开发有经验的一定知道，想通过 HAL_UART_Tran">
+<meta property="og:type" content="article">
+<meta property="og:title" content="semihosting与BKPT 0XAB">
+<meta property="og:url" content="http://orrinn.github.io/2022/08/12/semihosting%E4%B8%8EBKPT-0XAB/index.html">
+<meta property="og:site_name" content="Orrin&#39;s Blog">
+<meta property="og:description" content="今天被学长问到了一个奇怪的现象，就是stm32上电之后卡死的问题，简单的说stm32中使用了printf函数，同时进行了串口的重定向，但并未按照常规操作勾选Mircolib，导致上电卡死。但是debug的时候发现了汇编指令中本不应该存在的BKPT 0xAB，这就十分迷惑了，因此特意了解一下相关细节  什么是Microlib ​	对stm32开发有经验的一定知道，想通过 HAL_UART_Tran">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://orrinn.github.io/img/post_cover/Embedded_System.png">
+<meta property="article:published_time" content="2022-08-11T17:35:24.000Z">
+<meta property="article:modified_time" content="2022-08-12T14:42:56.111Z">
+<meta property="article:author" content="Orrin">
+<meta property="article:tag" content="嵌入式">
+<meta property="article:tag" content="stm32">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://orrinn.github.io/img/post_cover/Embedded_System.png"><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="http://orrinn.github.io/2022/08/12/semihosting%E4%B8%8EBKPT-0XAB/"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" media="print" onload="this.media='all'"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.min.css" media="print" onload="this.media='all'"><script>const GLOBAL_CONFIG = { 
+  root: '/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: undefined,
+  noticeOutdate: {"limitDay":365,"position":"top","messagePrev":"It has been","messageNext":"days since the last update, the content of the article may be outdated."},
+  highlight: {"plugin":"highlighjs","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false},
+  copy: {
+    success: '复制成功',
+    error: '复制错误',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  date_suffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  source: {
+    justifiedGallery: {
+      js: 'https://cdn.jsdelivr.net/npm/flickr-justified-gallery/dist/fjGallery.min.js',
+      css: 'https://cdn.jsdelivr.net/npm/flickr-justified-gallery/dist/fjGallery.min.css'
+    }
+  },
+  isPhotoFigcaption: false,
+  islazyload: true,
+  isAnchor: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'semihosting与BKPT 0XAB',
+  isPost: true,
+  isHome: false,
+  isHighlightShrink: false,
+  isToc: true,
+  postUpdate: '2022-08-12 22:42:56'
+}</script><noscript><style type="text/css">
+  #nav {
+    opacity: 1
+  }
+  .justified-gallery img {
+    opacity: 1
+  }
+
+  #recent-posts time,
+  #post-meta time {
+    display: inline !important
+  }
+</style></noscript><script>(win=>{
+    win.saveToLocal = {
+      set: function setWithExpiry(key, value, ttl) {
+        if (ttl === 0) return
+        const now = new Date()
+        const expiryDay = ttl * 86400000
+        const item = {
+          value: value,
+          expiry: now.getTime() + expiryDay,
+        }
+        localStorage.setItem(key, JSON.stringify(item))
+      },
+
+      get: function getWithExpiry(key) {
+        const itemStr = localStorage.getItem(key)
+
+        if (!itemStr) {
+          return undefined
+        }
+        const item = JSON.parse(itemStr)
+        const now = new Date()
+
+        if (now.getTime() > item.expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return item.value
+      }
+    }
+  
+    win.getScript = url => new Promise((resolve, reject) => {
+      const script = document.createElement('script')
+      script.src = url
+      script.async = true
+      script.onerror = reject
+      script.onload = script.onreadystatechange = function() {
+        const loadState = this.readyState
+        if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+        script.onload = script.onreadystatechange = null
+        resolve()
+      }
+      document.head.appendChild(script)
+    })
+  
+      win.activateDarkMode = function () {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      win.activateLightMode = function () {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+      const t = saveToLocal.get('theme')
+    
+          if (t === 'dark') activateDarkMode()
+          else if (t === 'light') activateLightMode()
+        
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        if (asideStatus === 'hide') {
+          document.documentElement.classList.add('hide-aside')
+        } else {
+          document.documentElement.classList.remove('hide-aside')
+        }
+      }
+    
+    const detectApple = () => {
+      if(/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)){
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+    })(window)</script><link rel="stylesheet" href="/css/custom.css"><svg aria-hidden="true" style="position:absolute; overflow:hidden; width:0; height:0"><symbol id="icon-sun" viewBox="0 0 1024 1024"><path d="M960 512l-128 128v192h-192l-128 128-128-128H192v-192l-128-128 128-128V192h192l128-128 128 128h192v192z" fill="#FFD878" p-id="8420"></path><path d="M736 512a224 224 0 1 0-448 0 224 224 0 1 0 448 0z" fill="#FFE4A9" p-id="8421"></path><path d="M512 109.248L626.752 224H800v173.248L914.752 512 800 626.752V800h-173.248L512 914.752 397.248 800H224v-173.248L109.248 512 224 397.248V224h173.248L512 109.248M512 64l-128 128H192v192l-128 128 128 128v192h192l128 128 128-128h192v-192l128-128-128-128V192h-192l-128-128z" fill="#4D5152" p-id="8422"></path><path d="M512 320c105.888 0 192 86.112 192 192s-86.112 192-192 192-192-86.112-192-192 86.112-192 192-192m0-32a224 224 0 1 0 0 448 224 224 0 0 0 0-448z" fill="#4D5152" p-id="8423"></path></symbol><symbol id="icon-moon" viewBox="0 0 1024 1024"><path d="M611.370667 167.082667a445.013333 445.013333 0 0 1-38.4 161.834666 477.824 477.824 0 0 1-244.736 244.394667 445.141333 445.141333 0 0 1-161.109334 38.058667 85.077333 85.077333 0 0 0-65.066666 135.722666A462.08 462.08 0 1 0 747.093333 102.058667a85.077333 85.077333 0 0 0-135.722666 65.024z" fill="#FFB531" p-id="11345"></path><path d="M329.728 274.133333l35.157333-35.157333a21.333333 21.333333 0 1 0-30.165333-30.165333l-35.157333 35.157333-35.114667-35.157333a21.333333 21.333333 0 0 0-30.165333 30.165333l35.114666 35.157333-35.114666 35.157334a21.333333 21.333333 0 1 0 30.165333 30.165333l35.114667-35.157333 35.157333 35.157333a21.333333 21.333333 0 1 0 30.165333-30.165333z" fill="#030835" p-id="11346"></path></symbol></svg><meta name="generator" content="Hexo 6.2.0"></head><body><div id="loading-box"><div class="loading-left-bg"></div><div class="loading-right-bg"></div><div class="spinner-box"><div class="configure-border-1"><div class="configure-core"></div></div><div class="configure-border-2"><div class="configure-core"></div></div><div class="loading-word">加载中...</div></div></div><div id="web_bg"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img is-center"><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/avatar.jpg" onerror="onerror=null;src='/img/friend_404.gif'" alt="avatar"/></div><div class="sidebar-site-data site-data is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">2</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">3</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">3</div></a></div><hr/><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> Home</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> Tags</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> Categories</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> About</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="not-top-img" id="page-header"><nav id="nav"><span id="blog_name"><a id="site-name" href="/">Orrin's Blog</a></span><div id="menus"><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> Home</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> Tags</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> Categories</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> About</span></a></div></div><div id="toggle-menu"><a class="site-page"><i class="fas fa-bars fa-fw"></i></a></div></div></nav></header><main class="layout" id="content-inner"><div id="post"><div id="post-info"><h1 class="post-title">semihosting与BKPT 0XAB</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2022-08-11T17:35:24.000Z" title="发表于 2022-08-12 01:35:24">2022-08-12</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2022-08-12T14:42:56.111Z" title="更新于 2022-08-12 22:42:56">2022-08-12</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%B5%8C%E5%85%A5%E5%BC%8F/">嵌入式</a><i class="fas fa-angle-right post-meta-separator"></i><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%B5%8C%E5%85%A5%E5%BC%8F/stm32/">stm32</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">字数总计:</span><span class="word-count">1.5k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>4分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title="semihosting与BKPT 0XAB"><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">阅读量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div><article class="post-content" id="article-container"><blockquote>
+<p>今天被学长问到了一个奇怪的现象，就是stm32上电之后卡死的问题，简单的说stm32中使用了printf函数，同时进行了串口的重定向，但并未按照常规操作勾选Mircolib，导致上电卡死。但是debug的时候发现了汇编指令中本不应该存在的BKPT 0xAB，这就十分迷惑了，因此特意了解一下相关细节</p>
+</blockquote>
+<h1>什么是Microlib</h1>
+<p>​	对stm32开发有经验的一定知道，想通过 <code>HAL_UART_Transmit()</code> 这样一个外设函数进行串口的格式化输出是十分繁琐且恶心人的，当然你可以使用 <code>sprintf()</code> 进行曲线救国，但是我最常用的还是 <code>printf()</code> 配合 <code>fputc()</code> 重定位，完成通过 <code>printf()</code> 实现的串口格式化输出。</p>
+<p>​	但是 <code>printf()</code> 本身是个标准的C库函数，需要标准C库的支持，但是在一块stm32为了一个简单的 <code>printf()</code> 就要把庞杂的标准库C库包含进来，显然有杀鸡用牛刀的感觉，于是便有了标准C库的精简版，Microlib</p>
+<h1>BKPT 0xAB 与 semihosting机制</h1>
+<p>​	首先，熟悉ARM汇编指令的一定对 <code>BKPT</code> 这个指令不陌生，这是一个软件断点指令，常用于debug调试，但是在没打断电的情况下，为什么汇编指令中会出现这个指令，这就和arm构架芯片的semihosting机制相关了。</p>
+<p>​	什么是semihosting（半主机）模式，这里引用来自arm官方给出的解释：</p>
+<p>​	半主机是用于 ARM 目标的一种机制，可将来自应用程序代码的输入/输出请求传送至运行调试器的主机。 例如，使用此机制可以启用 C 库中的函数，如 printf() 和 scanf()，来使用主机的屏幕和键盘，而不是在目标系统上配备屏幕和键盘。</p>
+<p>​    这种机制很有用，因为开发时使用的硬件通常没有最终系统的所有输入和输出设备。 半主机可让主机来提供这些设备。</p>
+<p>​	半主机是通过一组定义好的软件指令（如 SVC）来实现的，这些指令通过程序控制生成异常。 应用程序调用相应的半主机调用，然后调试代理处理该异常。 调试代理提供与主机之间的必需通信。</p>
+<p>​	显然，这种模式需要和主机配合，所以只在debug的时候才有用。因此在debug模式下会发现即是没有断电，但是程序中存在 <code>printf()</code> 的时候，汇编窗口中都能看到 <code>BKPT 0XAB</code> 这一条指令，这就是debug下触发半主机模式的指令。</p>
+<p>​	在正常的上电复位模式下，这个指令会引起异常，在没有裸机且没有看门狗的时候，异常都会导致陷入 <code>while()</code> 死循环中，这样子就表现为了死机</p>
+<h1>怎么解决</h1>
+<h2 id="常规操作——启用Microlib">常规操作——启用Microlib</h2>
+<p>​	最常规的当然是勾选Microlib了，为什么勾选之后就可以呢。因为Microlib是精简版的，本身没有semihosting模式（<s>令人意想不到的结论</s>），都不支持这个自然就不会触发异常了。</p>
+<h2 id="不使用Microlib：使用-pragma-或-sys-exit">不使用Microlib：使用 #pragma 或 _sys_exit()</h2>
+<p>​	当然，也不是非用Microlib不可，也可以通过编译器显式的指定不使用semihosting模式，即如下</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 使用宏强制指定不使用semihosting模式</span></span><br><span class="line"><span class="meta">#<span class="keyword">pragma</span> import(__use_no_semihosting) </span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 定义_sys_exit()防止触发0xab中断</span></span><br><span class="line"><span class="type">void</span> _sys_exit(<span class="type">int</span> x) &#123; </span><br><span class="line">    x = x; </span><br><span class="line">&#125; </span><br></pre></td></tr></table></figure>
+<p>​	上述二选一，在任意 .c 文件引入即可。但是显然，前者好理解，因为是强制指定，但是对于后者而言，为什么定义 <code>_sys_exit()</code> 就可以避免semihosting模式呢。这就涉及到更深层次的原理了。</p>
+<p>​	首先我们知道 <code>int main(int argc,char *argv)</code> 并不是真正的入口，那么来自其的 <code>return 0;</code> 也大概率不是真正的出口，系统在这背后必然做了一些回收性工作，而这些便和semihosting的触发息息相关了。因而我们需要先搞清楚一件事：<code>main()</code> 结束之后，系统干了个啥。</p>
+<h3 id="main">__main()</h3>
+<p>​	如果了解过 C 语言中相关的调用，那你一定对 <code>__main</code> 这个函数不陌生，这是入口函数 <code>main()</code> 的真正调用者，如果你不了解，这里简要分析一下，随便打开一个 .s 启动文件，便会发现如下代码</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">__Vectors       DCD     __initial_sp               ; Top of Stack</span><br><span class="line">                DCD     Reset_Handler              ; Reset Handler</span><br><span class="line">                ...                                ; 其他中断向量表定义</span><br><span class="line">                </span><br><span class="line">Reset_Handler    PROC</span><br><span class="line">                 EXPORT  Reset_Handler             [WEAK]</span><br><span class="line">        IMPORT  SystemInit</span><br><span class="line">        IMPORT  __main</span><br><span class="line"></span><br><span class="line">                 LDR     R0, =SystemInit</span><br><span class="line">                 BLX     R0</span><br><span class="line">                 LDR     R0, =__main</span><br><span class="line">                 BX      R0</span><br><span class="line">                 ENDP</span><br></pre></td></tr></table></figure>
+<p>​	第一个 <code>LDR</code> 指令的一定不陌生，这个是找到的 <code>SystemInit()</code> 函数，在进行一些基本的初始化，问题就在第二个 <code>LDR</code> 的 <code>__main</code> 上，这又是个什么东西呢，这个东西是C库的函数，找不到，于是遇事不决翻文档：</p>
+<blockquote>
+<p>《ARM Compiler v5.06 for µVision ARM C and C++ Libraries and Floating-Point Support User Guide》：<br>
+<a target="_blank" rel="noopener" href="https://developer.arm.com/documentation/dui0378/g?lang=en">https://developer.arm.com/documentation/dui0378/g?lang=en</a></p>
+</blockquote>
+<p>​	第 1.8.1 小结中给出了介绍：他做了三件事</p>
+<ol>
+<li>拷贝RW和RO段</li>
+<li>清空ZI段</li>
+<li>调用 <code>__rt_entry</code></li>
+</ol>
+<h3 id="rt-entry">__rt_entry</h3>
+<p>​	这个函数在该小节也讲了，主要干了四件事：</p>
+<ol>
+<li>
+<p>堆栈初始化：<code>__user_setup_stackheap()</code>, <code>__rt_stackheap_init()</code> 等</p>
+</li>
+<li>
+<p>C库初始化：<code>__rt_lib_init()</code></p>
+</li>
+<li>
+<p>调用 <code>main()</code></p>
+</li>
+<li>
+<p>调用 <code>exit()</code></p>
+<p>分析到此处，显然是有些明了了，在 <code>main()</code> 结束后，系统会进入 <code>exit()</code> 中，这就是系统退出的路径，那么问题便是 <code>exit()</code> 干了什么。</p>
+</li>
+</ol>
+<p>​	很可惜的是，找不到arm的标准C库源码，如果能找到的话应该能详细分析。没有办法，只能继续翻文档了：</p>
+<blockquote>
+<p>《ARM Compiler ARM C and C++ Libraries and Floating-Point Support User Guide Version 5.06》:</p>
+<p><a target="_blank" rel="noopener" href="https://developer.arm.com/documentation/dui0475/m/the-c-and-c---library-functions-reference/-sys-exit--">https://developer.arm.com/documentation/dui0475/m/the-c-and-c---library-functions-reference/-sys-exit--</a></p>
+</blockquote>
+<p>​	文档的第一句话直接说明了_sys_exit()是所有exit的出口，但是因为没有办法验证，所以先挖个坑，能验证后再回来填坑</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta">文章作者: </span><span class="post-copyright-info"><a href="http://orrinn.github.io">Orrin</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta">文章链接: </span><span class="post-copyright-info"><a href="http://orrinn.github.io/2022/08/12/semihosting%E4%B8%8EBKPT-0XAB/">http://orrinn.github.io/2022/08/12/semihosting%E4%B8%8EBKPT-0XAB/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta">版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来自 <a href="http://orrinn.github.io" target="_blank">Orrin's Blog</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E5%B5%8C%E5%85%A5%E5%BC%8F/">嵌入式</a><a class="post-meta__tags" href="/tags/stm32/">stm32</a></div><div class="post_share"><div class="social-share" data-image="/img/post_cover/Embedded_System.png" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><div class="next-post pull-full"><a href="/2022/06/30/markdown-test/"><img class="next-cover" src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_cover/markdown.png" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="pagination-info"><div class="label">下一篇</div><div class="next_info">Markdown test</div></div></a></div></nav></div><div class="aside-content" id="aside-content"><div class="card-widget card-info"><div class="is-center"><div class="avatar-img"><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/avatar.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info__name">Orrin</div><div class="author-info__description">操千曲而后晓声，观千剑而后识器</div></div><div class="card-info-data site-data is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">2</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">3</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">3</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/Orrinn"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content"></div><canvas class="illo" width="800" height="800" style="max-width: 200px; max-height: 200px; touch-action: none; width: 640px; height: 640px;"></canvas><script src="https://cdn.jsdelivr.net/gh/xiaopengand/blogCdn@latest/xzxr/twopeople1.js"></script><script src="https://cdn.jsdelivr.net/gh/xiaopengand/blogCdn@latest/xzxr/zdog.dist.js"></script><script id="rendered-js" src="https://cdn.jsdelivr.net/gh/xiaopengand/blogCdn@latest/xzxr/twopeople.js"></script><style>.card-widget.card-announcement {
+margin: 0;
+align-items: center;
+justify-content: center;
+text-align: center;
+}
+canvas {
+display: block;
+margin: 0 auto;
+cursor: move;
+}</style></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content is-expand"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link"><span class="toc-number">1.</span> <span class="toc-text">什么是Microlib</span></a></li><li class="toc-item toc-level-1"><a class="toc-link"><span class="toc-number">2.</span> <span class="toc-text">BKPT 0xAB 与 semihosting机制</span></a></li><li class="toc-item toc-level-1"><a class="toc-link"><span class="toc-number">3.</span> <span class="toc-text">怎么解决</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B8%B8%E8%A7%84%E6%93%8D%E4%BD%9C%E2%80%94%E2%80%94%E5%90%AF%E7%94%A8Microlib"><span class="toc-number">3.1.</span> <span class="toc-text">常规操作——启用Microlib</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%8D%E4%BD%BF%E7%94%A8Microlib%EF%BC%9A%E4%BD%BF%E7%94%A8-pragma-%E6%88%96-sys-exit"><span class="toc-number">3.2.</span> <span class="toc-text">不使用Microlib：使用 #pragma 或 _sys_exit()</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#main"><span class="toc-number">3.2.1.</span> <span class="toc-text">__main()</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#rt-entry"><span class="toc-number">3.2.2.</span> <span class="toc-text">__rt_entry</span></a></li></ol></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/2022/08/12/semihosting%E4%B8%8EBKPT-0XAB/" title="semihosting与BKPT 0XAB"><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_cover/Embedded_System.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="semihosting与BKPT 0XAB"/></a><div class="content"><a class="title" href="/2022/08/12/semihosting%E4%B8%8EBKPT-0XAB/" title="semihosting与BKPT 0XAB">semihosting与BKPT 0XAB</a><time datetime="2022-08-11T17:35:24.000Z" title="发表于 2022-08-12 01:35:24">2022-08-12</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2022/06/30/markdown-test/" title="Markdown test"><img src= "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-lazy-src="/img/post_cover/markdown.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Markdown test"/></a><div class="content"><a class="title" href="/2022/06/30/markdown-test/" title="Markdown test">Markdown test</a><time datetime="2022-06-29T21:11:08.000Z" title="发表于 2022-06-30 05:11:08">2022-06-30</time></div></div></div></div></div></div></main><footer id="footer"><div id="footer-wrap"><div class="copyright">&copy;2020 - 2023 By Orrin</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><a class="icon-V hidden" onclick="switchNightMode()" title="浅色和深色模式转换"><svg width="25" height="25" viewBox="0 0 1024 1024"><use id="modeicon" xlink:href="#icon-moon"></use></svg></a><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside_config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js"></script><script src="/js/main.js"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/vanilla-lazyload/dist/lazyload.iife.min.js"></script><script>function panguFn () {
+  if (typeof pangu === 'object') pangu.autoSpacingPage()
+  else {
+    getScript('https://cdn.jsdelivr.net/npm/pangu/dist/browser/pangu.min.js')
+      .then(() => {
+        pangu.autoSpacingPage()
+      })
+  }
+}
+
+function panguInit () {
+  if (false){
+    GLOBAL_CONFIG_SITE.isPost && panguFn()
+  } else {
+    panguFn()
+  }
+}
+
+document.addEventListener('DOMContentLoaded', panguInit)</script><script async="async">var preloader = {
+  endLoading: () => {
+    document.body.style.overflow = 'auto';
+    document.getElementById('loading-box').classList.add("loaded")
+  },
+  initLoading: () => {
+    document.body.style.overflow = '';
+    document.getElementById('loading-box').classList.remove("loaded")
+
+  }
+}
+window.addEventListener('load',preloader.endLoading())
+setTimeout(function(){preloader.endLoading();}, 5000);</script><div class="js-pjax"></div><script src="https://code.jquery.com/jquery-latest.js"></script><script async src="https://cdn.jsdelivr.net/gh/xiabo2/CDN@latest/fishes.js"></script><script async src="/js/sun_moon.js"></script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
